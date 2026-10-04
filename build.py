@@ -19,7 +19,7 @@ from pathlib import Path
 import pyogrio
 import pyproj
 import shapely
-from shapely.geometry import MultiPolygon, Polygon, mapping, shape
+from shapely.geometry import MultiPolygon, Polygon, mapping
 from shapely.ops import transform, unary_union
 
 TILE_INDEX = (
@@ -27,7 +27,6 @@ TILE_INDEX = (
     "?dataset_id=landsd_rcd_1637224243141_96556&format=geojson&layer_name=TileIndex"
 )
 CACHE = Path(".cache/ib5000")
-ADDITIONS = "additions.geojson"
 OUTPUT = "hk_terrestrial.geojson"
 OUTPUT_LIGHT = "hk_terrestrial_2m.geojson"
 MANIFEST = "sheets.json"
@@ -43,12 +42,10 @@ MANIFEST = "sheets.json"
 LAND_CODES = ("LAF", "PON", "RES", "FEB", "FOU", "SRC", "SRO", "SRP")
 MANGROVE_CODES = ("MAN",)
 
-SEAM = 3.0  # metres; closes gaps under ~6 m where an addition meets land
 MIN_PART_M2 = 1.0  # drops slivers; the smallest real islets are larger
 LIGHT_SIMPLIFY_M = 2.0  # metres; the light file stays within this of the full one
 DECIMALS = 7  # about 1 cm
 
-TO_GRID = pyproj.Transformer.from_crs(4326, 2326, always_xy=True).transform
 TO_WGS84 = pyproj.Transformer.from_crs(2326, 4326, always_xy=True).transform
 
 
@@ -105,16 +102,6 @@ def polygons(geom):
     return []
 
 
-def load_additions():
-    """Hand-drawn land missing from the map, in the map's grid (metres)."""
-    features = json.load(open(ADDITIONS))["features"]
-    return [
-        p
-        for f in features
-        for p in polygons(shapely.make_valid(transform(TO_GRID, shape(f["geometry"]))))
-    ]
-
-
 def rounded(c):
     return [rounded(x) for x in c] if isinstance(c, (list, tuple)) else round(c, DECIMALS)
 
@@ -133,13 +120,7 @@ def main():
     for sheet in sorted(index):
         pieces += read(sheet, "HydrographyPoly", LAND_CODES)
         pieces += read(sheet, "LandCoverPoly", MANGROVE_CODES)
-    additions = load_additions()
-    land = unary_union([p for g in pieces for p in polygons(shapely.make_valid(g))] + additions)
-
-    if additions:
-        near = unary_union([a.boundary for a in additions]).buffer(10 * SEAM)
-        closed = land.buffer(SEAM, join_style="mitre").buffer(-SEAM, join_style="mitre")
-        land = unary_union([land, closed.difference(land).intersection(near)])
+    land = unary_union([p for g in pieces for p in polygons(shapely.make_valid(g))])
 
     # Fill every hole (water enclosed by land counts as land) and drop
     # slivers. Repeat, since filling can make parts touch and enclose a gap.

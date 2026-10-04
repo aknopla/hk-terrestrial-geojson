@@ -4,13 +4,27 @@ Hong Kong's land area as a single GeoJSON MultiPolygon, built from the Lands
 Department's current 1:5,000 topographic map.
 
 **[See it on a map →](https://aknopla.github.io/hk-terrestrial-geojson/)**
-The dataset drawn over a two-colour OpenStreetMap basemap of land and sea.
+The dataset drawn over a two-colour OpenStreetMap basemap of land and sea, or
+over the Lands Department's aerial imagery, at either level of detail.
 
 ## Download
 
 Each version is published as a
 [GitHub Release](https://github.com/aknopla/hk-terrestrial-geojson/releases)
-with both files attached. The newest version is always at:
+with both files attached. They describe the same land; the 2 m file trades
+a little edge detail for a third of the size.
+
+| | `hk_terrestrial.geojson` | `hk_terrestrial_2m.geojson` |
+|---|---:|---:|
+| **Size** | **4.8 MB** | **1.75 MB** |
+| Gzipped (as the map page loads it) | 1.3 MB | 0.5 MB |
+| Points | 195,189 | 70,652 |
+| Polygons | 823 | 823 |
+| Area | 1,118.73 km² | 1,118.69 km² |
+| Detail | the map's full detail | every edge within 2 m of the full file |
+| Use it for | analysis, precise land/sea tests | apps and web maps |
+
+The newest version is always at:
 
 ```
 https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/hk_terrestrial.geojson
@@ -45,10 +59,9 @@ also takes in surrounding waters.
 
 | File | What it is |
 |---|---|
-| `hk_terrestrial.geojson` | **The dataset**, at the map's full detail. One feature: a MultiPolygon of 823 non-overlapping polygons, 195,189 points, about 1,118.7 km². Minified, 4.8 MB. |
-| `hk_terrestrial_2m.geojson` | The same, simplified so no edge moves more than 2 m: 70,652 points, 1.75 MB. For apps and web maps. |
+| `hk_terrestrial.geojson` | **The dataset**, at the map's full detail: one feature, a MultiPolygon of non-overlapping polygons. |
+| `hk_terrestrial_2m.geojson` | The same, simplified so no edge moves more than 2 m. |
 | `sheets.json` | The revision date of each of the 193 map sheets the dataset was built from. |
-| `additions.geojson` | Land the official map doesn't show yet, drawn by hand. Currently empty. |
 | `build.py` | Downloads the map and builds both datasets. |
 
 All files use WGS 84 longitude/latitude (`EPSG:4326` / `CRS84`), the
@@ -100,18 +113,13 @@ python build.py
 1. reads the sheet index from CSDI, and downloads any sheet that is missing
    from `.cache/` or has been revised since (the first run fetches all
    193);
-2. takes the land, inland water and mangrove polygons from every sheet, plus
-   `additions.geojson`;
+2. takes the land, inland water and mangrove polygons from every sheet;
 3. combines them into one shape, in the map's own grid, so the sheets join
    exactly;
 4. fills any holes, since water enclosed by land counts as land, and drops
    slivers under 1 m²;
 5. converts to longitude/latitude, rounds coordinates to about 1 cm, and
    writes both datasets and `sheets.json`.
-
-To add land the map doesn't show yet, draw a polygon in `additions.geojson`.
-It only has to cover the missing land; it can overlap the coastline freely,
-because the build combines everything.
 
 ## Licence
 

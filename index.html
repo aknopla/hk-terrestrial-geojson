@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HK Terrestrial GeoJSON</title>
-  <meta name="description" content="Hong Kong's land area as one GeoJSON MultiPolygon, from the Lands Department's 1:5,000 map, shown over OpenStreetMap.">
+  <meta name="description" content="Hong Kong's land area as one GeoJSON MultiPolygon, from the Lands Department's 1:5,000 map, shown over OpenStreetMap or aerial imagery.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23c9dbe6'/%3E%3Crect x='3' y='3' width='10' height='10' rx='2' fill='%23d9480f' fill-opacity='.6' stroke='%23d9480f'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css">
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
@@ -32,7 +32,8 @@
     .card .key { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
       border: 1px solid var(--overlay); background: color-mix(in srgb, var(--overlay) 35%, transparent); }
     .card nav a { color: var(--card-text); font-weight: 500; margin-right: 12px; }
-    .toggle { display: flex; margin: 0 0 10px; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; }
+    .toggle { display: flex; margin: 0 0 8px; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; }
+    .toggle:last-of-type { margin-bottom: 10px; }
     .toggle button {
       flex: 1; padding: 5px 8px; border: 0; background: transparent; color: var(--card-text);
       font: inherit; font-size: 13px; cursor: pointer;
@@ -41,6 +42,7 @@
     .toggle button[aria-checked="true"] { background: var(--overlay); color: #fff; }
     .toggle button span { opacity: 0.75; font-size: 12px; }
     .status { color: var(--card-muted); font-size: 12px; }
+    .landsd-logo { display: block; width: 28px; height: 28px; }
     @media (max-width: 480px) {
       .card { right: 16px; max-width: none; }
     }
@@ -51,9 +53,13 @@
   <div class="card">
     <h1>HK terrestrial GeoJSON</h1>
     <p><span class="key"></span>Hong Kong's land area, from the Lands Department's 1:5,000 map</p>
-    <div class="toggle" role="radiogroup" aria-label="Detail">
-      <button type="button" role="radio" data-file="hk_terrestrial.geojson">Full detail <span>4.8 MB</span></button>
-      <button type="button" role="radio" data-file="hk_terrestrial_2m.geojson">Within 2 m <span>1.75 MB</span></button>
+    <div class="toggle" role="radiogroup" aria-label="Basemap" data-param="basemap">
+      <button type="button" role="radio" data-value="map">Map</button>
+      <button type="button" role="radio" data-value="satellite">Satellite</button>
+    </div>
+    <div class="toggle" role="radiogroup" aria-label="Detail" data-param="detail">
+      <button type="button" role="radio" data-value="full">Full detail <span>4.8 MB</span></button>
+      <button type="button" role="radio" data-value="2m">Within 2 m <span>1.75 MB</span></button>
     </div>
     <nav>
       <a id="download" href="">Download</a>
@@ -69,25 +75,39 @@
     const HK = [[113.8350316, 22.1533951], [114.4419732, 22.5618462]];
     const RELEASE = "https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/";
     const FILES = { full: "hk_terrestrial.geojson", "2m": "hk_terrestrial_2m.geojson" };
+    const DEFAULTS = { basemap: "map", detail: "full" };
 
-    // ?detail=2m picks the light file, so a shared link opens on it.
+    // Each switch is kept in the URL (?basemap=satellite, ?detail=2m) when it
+    // isn't the default, so a shared link opens the same view.
     const params = new URLSearchParams(location.search);
-    let file = FILES[params.get("detail")] || FILES.full;
+    const toggles = [...document.querySelectorAll(".toggle")];
+    const state = {};
+    for (const t of toggles) {
+      const values = [...t.querySelectorAll("button")].map((b) => b.dataset.value);
+      const wanted = params.get(t.dataset.param);
+      state[t.dataset.param] = values.includes(wanted) ? wanted : DEFAULTS[t.dataset.param];
+    }
 
-    const buttons = document.querySelectorAll(".toggle button");
     const download = document.getElementById("download");
     const status = document.getElementById("status");
 
-    function select(next) {
-      file = next;
-      for (const b of buttons) b.setAttribute("aria-checked", String(b.dataset.file === file));
-      download.href = RELEASE + file;
-      const detail = Object.keys(FILES).find((k) => FILES[k] === file);
-      if (detail === "full") params.delete("detail"); else params.set("detail", detail);
+    function render() {
+      for (const t of toggles) {
+        for (const b of t.querySelectorAll("button")) {
+          b.setAttribute("aria-checked", String(b.dataset.value === state[t.dataset.param]));
+        }
+      }
+      download.href = RELEASE + FILES[state.detail];
+      for (const [key, value] of Object.entries(state)) {
+        if (value === DEFAULTS[key]) params.delete(key); else params.set(key, value);
+      }
       const query = params.toString();
       history.replaceState(null, "", location.pathname + (query ? "?" + query : "") + location.hash);
     }
-    select(file);
+    render();
+
+    const satellite = () => state.basemap === "satellite";
+    const visible = (on) => ({ visibility: on ? "visible" : "none" });
 
     const map = new maplibregl.Map({
       container: "map",
@@ -113,48 +133,92 @@
               '<a href="https://www.openmaptiles.org/">&copy; OpenMapTiles</a> ' +
               '<a href="https://www.openstreetmap.org/copyright">&copy; OpenStreetMap contributors</a>',
           },
-          hk: { type: "geojson", data: file },
+          imagery: {
+            type: "raster",
+            tiles: ["https://mapapi.geodata.gov.hk/gs/api/v1.0.0/xyz/imagery/WGS84/{z}/{x}/{y}.png"],
+            tileSize: 256,
+            maxzoom: 20,
+            attribution:
+              '<a href="https://portal.csdi.gov.hk/csdi-webpage/apidoc/ImageryMapAPI">' +
+              "&copy; Aerial Photograph from Lands Department</a>; " +
+              "Satellite Images from Landsat and MODIS",
+          },
+          hk: { type: "geojson", data: FILES[state.detail] },
         },
         layers: [
-          // Two basemap colours only: everything is land except OSM's ocean.
+          // Map: two colours only, everything is land except OSM's ocean.
           // Lakes, reservoirs and rivers stay land, as in the dataset.
           { id: "land", type: "background", paint: { "background-color": color("--land") } },
           {
             id: "ocean", type: "fill", source: "osm", "source-layer": "water",
             filter: ["==", ["get", "class"], "ocean"],
+            layout: visible(!satellite()),
             paint: { "fill-color": color("--ocean"), "fill-antialias": false },
           },
+          // Satellite: the Lands Department's aerial imagery.
+          { id: "imagery", type: "raster", source: "imagery", layout: visible(satellite()) },
           {
             id: "hk-fill", type: "fill", source: "hk",
-            paint: { "fill-color": color("--overlay"), "fill-opacity": 0.35, "fill-antialias": false },
+            paint: { "fill-color": color("--overlay"), "fill-opacity": satellite() ? 0.2 : 0.35, "fill-antialias": false },
           },
           {
             id: "hk-line", type: "line", source: "hk",
-            paint: { "line-color": color("--overlay"), "line-width": 1 },
+            paint: { "line-color": color("--overlay"), "line-width": satellite() ? 1.5 : 1 },
           },
         ],
       },
     });
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 
+    // The Lands Department's terms ask for its logo on the map face whenever
+    // its imagery is shown.
+    const logo = {
+      onAdd() {
+        const el = document.createElement("div");
+        el.className = "maplibregl-ctrl";
+        el.innerHTML =
+          '<img class="landsd-logo" src="https://api.hkmapservice.gov.hk/mapapi/landsdlogo.jpg" alt="Lands Department">';
+        return (this.el = el);
+      },
+      onRemove() { this.el.remove(); },
+    };
+    const showLogo = (on) => {
+      if (on && !logo.el?.isConnected) map.addControl(logo, "bottom-right");
+      if (!on && logo.el?.isConnected) map.removeControl(logo);
+    };
+    showLogo(satellite());
+
     // Show "Loading…" until the overlay has drawn; the full file takes a moment.
     status.textContent = "Loading…";
     map.once("idle", () => (status.textContent = ""));
 
-    // Swap the overlay's data, waiting for the style if it is still loading.
-    function apply() {
-      if (!map.isStyleLoaded()) return map.once("load", apply);
-      map.getSource("hk").setData(file);
-      map.once("idle", () => (status.textContent = ""));
+    // Bring the map in line with the switches, waiting for the style if it
+    // is still loading.
+    function apply(changed) {
+      if (!map.isStyleLoaded()) return map.once("load", () => apply(changed));
+      if (changed === "detail") {
+        map.getSource("hk").setData(FILES[state.detail]);
+        map.once("idle", () => (status.textContent = ""));
+      } else {
+        map.setLayoutProperty("ocean", "visibility", satellite() ? "none" : "visible");
+        map.setLayoutProperty("imagery", "visibility", satellite() ? "visible" : "none");
+        map.setPaintProperty("hk-fill", "fill-opacity", satellite() ? 0.2 : 0.35);
+        map.setPaintProperty("hk-line", "line-width", satellite() ? 1.5 : 1);
+        showLogo(satellite());
+      }
     }
 
-    for (const b of buttons) {
-      b.addEventListener("click", () => {
-        if (b.dataset.file === file) return;
-        select(b.dataset.file);
-        status.textContent = "Loading…";
-        apply();
-      });
+    for (const t of toggles) {
+      for (const b of t.querySelectorAll("button")) {
+        b.addEventListener("click", () => {
+          const key = t.dataset.param;
+          if (state[key] === b.dataset.value) return;
+          state[key] = b.dataset.value;
+          render();
+          if (key === "detail") status.textContent = "Loading…";
+          apply(key);
+        });
+      }
     }
   </script>
 </body>
