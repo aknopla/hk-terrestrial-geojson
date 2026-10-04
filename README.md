@@ -3,6 +3,19 @@
 Hong Kong's land area as a single GeoJSON MultiPolygon, kept up to date with
 land the government's published coastline does not show yet.
 
+## Download
+
+Each version is published as a
+[GitHub Release](https://github.com/aknopla/hk-terrestrial-geojson/releases)
+with `hk_terrestrial.geojson` attached. The newest version is always at:
+
+```
+https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/hk_terrestrial.geojson
+```
+
+To pin a version, replace `latest/download` with `download/<tag>`, for
+example `download/v1.0.0`.
+
 ## What "terrestrial" means here
 
 Terrestrial means **land**: everything inside Hong Kong's coastline,
