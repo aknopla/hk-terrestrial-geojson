@@ -32,6 +32,15 @@
     .card .key { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
       border: 1px solid var(--overlay); background: color-mix(in srgb, var(--overlay) 35%, transparent); }
     .card nav a { color: var(--card-text); font-weight: 500; margin-right: 12px; }
+    .toggle { display: flex; margin: 0 0 10px; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; }
+    .toggle button {
+      flex: 1; padding: 5px 8px; border: 0; background: transparent; color: var(--card-text);
+      font: inherit; font-size: 13px; cursor: pointer;
+    }
+    .toggle button + button { border-left: 1px solid #d0d7de; }
+    .toggle button[aria-checked="true"] { background: var(--overlay); color: #fff; }
+    .toggle button span { opacity: 0.75; font-size: 12px; }
+    .status { color: var(--card-muted); font-size: 12px; }
     @media (max-width: 480px) {
       .card { right: 16px; max-width: none; }
     }
@@ -42,9 +51,14 @@
   <div class="card">
     <h1>HK terrestrial GeoJSON</h1>
     <p><span class="key"></span>Hong Kong's land area, from the Lands Department's 1:5,000 map</p>
+    <div class="toggle" role="radiogroup" aria-label="Detail">
+      <button type="button" role="radio" data-file="hk_terrestrial.geojson">Full detail <span>4.8 MB</span></button>
+      <button type="button" role="radio" data-file="hk_terrestrial_2m.geojson">Within 2 m <span>1.75 MB</span></button>
+    </div>
     <nav>
-      <a href="https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/hk_terrestrial.geojson">Download</a>
+      <a id="download" href="">Download</a>
       <a href="https://github.com/aknopla/hk-terrestrial-geojson">GitHub</a>
+      <span class="status" id="status" aria-live="polite"></span>
     </nav>
   </div>
   <script>
@@ -52,9 +66,30 @@
     const color = (name) => css.getPropertyValue(name).trim();
 
     // Bounds of hk_terrestrial.geojson.
-    const HK = [[113.8350664, 22.1534109], [114.4416443, 22.5620046]];
+    const HK = [[113.8350316, 22.1533951], [114.4419732, 22.5618462]];
+    const RELEASE = "https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/";
+    const FILES = { full: "hk_terrestrial.geojson", "2m": "hk_terrestrial_2m.geojson" };
 
-    new maplibregl.Map({
+    // ?detail=2m picks the light file, so a shared link opens on it.
+    const params = new URLSearchParams(location.search);
+    let file = FILES[params.get("detail")] || FILES.full;
+
+    const buttons = document.querySelectorAll(".toggle button");
+    const download = document.getElementById("download");
+    const status = document.getElementById("status");
+
+    function select(next) {
+      file = next;
+      for (const b of buttons) b.setAttribute("aria-checked", String(b.dataset.file === file));
+      download.href = RELEASE + file;
+      const detail = Object.keys(FILES).find((k) => FILES[k] === file);
+      if (detail === "full") params.delete("detail"); else params.set("detail", detail);
+      const query = params.toString();
+      history.replaceState(null, "", location.pathname + (query ? "?" + query : "") + location.hash);
+    }
+    select(file);
+
+    const map = new maplibregl.Map({
       container: "map",
       bounds: HK,
       fitBoundsOptions: { padding: 40 },
@@ -78,7 +113,7 @@
               '<a href="https://www.openmaptiles.org/">&copy; OpenMapTiles</a> ' +
               '<a href="https://www.openstreetmap.org/copyright">&copy; OpenStreetMap contributors</a>',
           },
-          hk: { type: "geojson", data: "hk_terrestrial.geojson" },
+          hk: { type: "geojson", data: file },
         },
         layers: [
           // Two basemap colours only: everything is land except OSM's ocean.
@@ -99,7 +134,28 @@
           },
         ],
       },
-    }).addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    });
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+
+    // Show "Loading…" until the overlay has drawn; the full file takes a moment.
+    status.textContent = "Loading…";
+    map.once("idle", () => (status.textContent = ""));
+
+    // Swap the overlay's data, waiting for the style if it is still loading.
+    function apply() {
+      if (!map.isStyleLoaded()) return map.once("load", apply);
+      map.getSource("hk").setData(file);
+      map.once("idle", () => (status.textContent = ""));
+    }
+
+    for (const b of buttons) {
+      b.addEventListener("click", () => {
+        if (b.dataset.file === file) return;
+        select(b.dataset.file);
+        status.textContent = "Loading…";
+        apply();
+      });
+    }
   </script>
 </body>
 </html>
