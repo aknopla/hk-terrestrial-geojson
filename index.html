@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HK Terrestrial GeoJSON</title>
+  <meta name="description" content="Hong Kong's land area as one GeoJSON MultiPolygon: CEDD's coastline plus newer reclamation, shown over OpenStreetMap.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23c9dbe6'/%3E%3Crect x='3' y='3' width='10' height='10' rx='2' fill='%23d9480f' fill-opacity='.6' stroke='%23d9480f'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css">
+  <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
+  <style>
+    :root {
+      --land: #f3f1ec;
+      --ocean: #c9dbe6;
+      --overlay: #d9480f;
+      --card-bg: rgba(255, 255, 255, 0.92);
+      --card-text: #1f2328;
+      --card-muted: #59636e;
+    }
+    html, body { margin: 0; height: 100%; background: var(--ocean); }
+    body { font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; }
+    #map { position: absolute; inset: 0; }
+    .card {
+      position: absolute; top: 16px; left: 16px; z-index: 1;
+      max-width: 300px; box-sizing: border-box;
+      padding: 12px 14px; border-radius: 8px;
+      background: var(--card-bg); color: var(--card-text);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    }
+    .card h1 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+    .card p { margin: 0 0 8px; color: var(--card-muted); }
+    .card .key { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
+      border: 1px solid var(--overlay); background: color-mix(in srgb, var(--overlay) 35%, transparent); }
+    .card nav a { color: var(--card-text); font-weight: 500; margin-right: 12px; }
+    @media (max-width: 480px) {
+      .card { right: 16px; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="card">
+    <h1>HK terrestrial GeoJSON</h1>
+    <p><span class="key"></span>Hong Kong's land area: CEDD's coastline plus newer reclamation</p>
+    <nav>
+      <a href="https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/hk_terrestrial.geojson">Download</a>
+      <a href="https://github.com/aknopla/hk-terrestrial-geojson">GitHub</a>
+    </nav>
+  </div>
+  <script>
+    const css = getComputedStyle(document.documentElement);
+    const color = (name) => css.getPropertyValue(name).trim();
+
+    // Bounds of hk_terrestrial.geojson.
+    const HK = [[113.8350664, 22.1534109], [114.4416443, 22.5620046]];
+
+    new maplibregl.Map({
+      container: "map",
+      bounds: HK,
+      fitBoundsOptions: { padding: 40 },
+      hash: true,
+      maxBounds: [[113.2, 21.8], [115.1, 22.95]],
+      dragRotate: false,
+      pitchWithRotate: false,
+      touchPitch: false,
+      attributionControl: {
+        customAttribution:
+          'Hong Kong land: <a href="https://data.gov.hk/en-data/dataset/hk-cedd-csu-cedd-geom-100k">CEDD via DATA.GOV.HK</a>',
+      },
+      style: {
+        version: 8,
+        sources: {
+          osm: {
+            type: "vector",
+            url: "https://tiles.openfreemap.org/planet",
+            attribution:
+              '<a href="https://openfreemap.org">OpenFreeMap</a> ' +
+              '<a href="https://www.openmaptiles.org/">&copy; OpenMapTiles</a> ' +
+              '<a href="https://www.openstreetmap.org/copyright">&copy; OpenStreetMap contributors</a>',
+          },
+          hk: { type: "geojson", data: "hk_terrestrial.geojson" },
+        },
+        layers: [
+          // Two basemap colours only: everything is land except OSM's ocean.
+          // Lakes, reservoirs and rivers stay land, as in the dataset.
+          { id: "land", type: "background", paint: { "background-color": color("--land") } },
+          {
+            id: "ocean", type: "fill", source: "osm", "source-layer": "water",
+            filter: ["==", ["get", "class"], "ocean"],
+            paint: { "fill-color": color("--ocean"), "fill-antialias": false },
+          },
+          {
+            id: "hk-fill", type: "fill", source: "hk",
+            paint: { "fill-color": color("--overlay"), "fill-opacity": 0.35, "fill-antialias": false },
+          },
+          {
+            id: "hk-line", type: "line", source: "hk",
+            paint: { "line-color": color("--overlay"), "line-width": 1 },
+          },
+        ],
+      },
+    }).addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+  </script>
+</body>
+</html>

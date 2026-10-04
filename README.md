@@ -3,6 +3,9 @@
 Hong Kong's land area as a single GeoJSON MultiPolygon, kept up to date with
 land the government's published coastline does not show yet.
 
+**[See it on a map →](https://aknopla.github.io/hk-terrestrial-geojson/)**
+The dataset drawn over a two-colour OpenStreetMap basemap of land and sea.
+
 ## Download
 
 Each version is published as a
