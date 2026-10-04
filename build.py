@@ -5,7 +5,8 @@
 
 Downloads the 193 iB5000 sheets into .cache/ (about 1.2 GB; only sheets
 that are missing or have been revised are fetched again), then writes
-hk_terrestrial.geojson, hk_terrestrial_2m.geojson and sheets.json.
+hk_terrestrial.geojson, hk_terrestrial_2m.geojson, hk_sea_mask.geojson and
+sheets.json.
 """
 
 import json
@@ -29,6 +30,7 @@ TILE_INDEX = (
 CACHE = Path(".cache/ib5000")
 OUTPUT = "hk_terrestrial.geojson"
 OUTPUT_LIGHT = "hk_terrestrial_2m.geojson"
+OUTPUT_MASK = "hk_sea_mask.geojson"
 MANIFEST = "sheets.json"
 
 # What counts as land. iB5000 codes, from its data dictionary:
@@ -45,6 +47,10 @@ MANGROVE_CODES = ("MAN",)
 MIN_PART_M2 = 1.0  # drops slivers; the smallest real islets are larger
 LIGHT_SIMPLIFY_M = 2.0  # metres; the light file stays within this of the full one
 DECIMALS = 7  # about 1 cm
+MASK_DECIMALS = 6  # about 10 cm; plenty for a shape already within 2 m
+
+# The mask is this rectangle with every piece of land cut out as a hole.
+WORLD = [(-180, -90), (180, -90), (180, 90), (-180, 90), (-180, -90)]
 
 TO_WGS84 = pyproj.Transformer.from_crs(2326, 4326, always_xy=True).transform
 
@@ -102,8 +108,8 @@ def polygons(geom):
     return []
 
 
-def rounded(c):
-    return [rounded(x) for x in c] if isinstance(c, (list, tuple)) else round(c, DECIMALS)
+def rounded(c, decimals):
+    return [rounded(x, decimals) for x in c] if isinstance(c, (list, tuple)) else round(c, decimals)
 
 
 def main():
@@ -130,8 +136,10 @@ def main():
             break
         land = merged
 
+    light = land.simplify(LIGHT_SIMPLIFY_M, preserve_topology=True)
     write(land, OUTPUT)
-    write(land.simplify(LIGHT_SIMPLIFY_M, preserve_topology=True), OUTPUT_LIGHT)
+    write(light, OUTPUT_LIGHT)
+    write_mask(light, OUTPUT_MASK)
     with open(MANIFEST, "w") as f:
         json.dump({s: index[s]["REVISIONDATE"] for s in sorted(index)}, f, indent=0)
         f.write("\n")
@@ -142,23 +150,40 @@ def write(land, path):
     area_km2 = land.area / 1e6
     land = shapely.set_precision(transform(TO_WGS84, land), 10**-DECIMALS)
     land = MultiPolygon(polygons(shapely.orient_polygons(land)))  # RFC 7946 winding
-    assert land.is_valid, shapely.is_valid_reason(land)
-
-    geometry = mapping(land)
-    geometry["coordinates"] = rounded(geometry["coordinates"])
-    with open(path, "w") as f:
-        json.dump(
-            {
-                "type": "FeatureCollection",
-                "features": [{"type": "Feature", "properties": {}, "geometry": geometry}],
-            },
-            f,
-            separators=(",", ":"),
-        )
+    dump(land, path, DECIMALS)
     print(
         f"{path}: {len(land.geoms)} polygons, "
         f"{shapely.get_num_coordinates(land)} points, {area_km2:.2f} km²"
     )
+
+
+def write_mask(land, path):
+    """Write everything except land: the world with each land polygon as a hole.
+
+    For dimming a map outside Hong Kong: a renderer can't invert a polygon,
+    so the inverse is prebuilt here.
+    """
+    land = shapely.set_precision(transform(TO_WGS84, land), 10**-MASK_DECIMALS)
+    holes = [p.exterior.coords for p in polygons(land)]
+    mask = shapely.orient_polygons(Polygon(WORLD, holes))  # RFC 7946 winding
+    dump(mask, path, MASK_DECIMALS)
+    print(f"{path}: {len(holes)} holes, {shapely.get_num_coordinates(mask)} points")
+
+
+def dump(geometry, path, decimals):
+    """Write a geometry as a one-feature GeoJSON FeatureCollection."""
+    assert geometry.is_valid, shapely.is_valid_reason(geometry)
+    geojson = mapping(geometry)
+    geojson["coordinates"] = rounded(geojson["coordinates"], decimals)
+    with open(path, "w") as f:
+        json.dump(
+            {
+                "type": "FeatureCollection",
+                "features": [{"type": "Feature", "properties": {}, "geometry": geojson}],
+            },
+            f,
+            separators=(",", ":"),
+        )
 
 
 if __name__ == "__main__":
