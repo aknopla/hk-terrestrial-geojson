@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HK Terrestrial GeoJSON</title>
-  <meta name="description" content="Hong Kong's land area as one GeoJSON MultiPolygon: CEDD's coastline plus newer reclamation, shown over OpenStreetMap.">
+  <meta name="description" content="Hong Kong's land area as one GeoJSON MultiPolygon, from the Lands Department's 1:5,000 map, shown over OpenStreetMap.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23c9dbe6'/%3E%3Crect x='3' y='3' width='10' height='10' rx='2' fill='%23d9480f' fill-opacity='.6' stroke='%23d9480f'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css">
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
@@ -41,7 +41,7 @@
   <div id="map"></div>
   <div class="card">
     <h1>HK terrestrial GeoJSON</h1>
-    <p><span class="key"></span>Hong Kong's land area: CEDD's coastline plus newer reclamation</p>
+    <p><span class="key"></span>Hong Kong's land area, from the Lands Department's 1:5,000 map</p>
     <nav>
       <a href="https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/hk_terrestrial.geojson">Download</a>
       <a href="https://github.com/aknopla/hk-terrestrial-geojson">GitHub</a>
@@ -65,7 +65,7 @@
       touchPitch: false,
       attributionControl: {
         customAttribution:
-          'Hong Kong land: <a href="https://data.gov.hk/en-data/dataset/hk-cedd-csu-cedd-geom-100k">CEDD via DATA.GOV.HK</a>',
+          'Hong Kong land: <a href="https://portal.csdi.gov.hk/">Lands Department via CSDI</a>',
       },
       style: {
         version: 8,
