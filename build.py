@@ -1,14 +1,19 @@
-"""Build hk_terrestrial.geojson from the Lands Department's iB5000 map.
+"""Build hk_terrestrial.geojson from the Lands Department's iB5000 map, and
+hk_boundary.geojson from the Home Affairs Department's district boundaries.
 
     pip install -r requirements.txt
-    python build.py
+    python build.py             # everything
+    python build.py land        # only the land files and the sea mask
+    python build.py boundary    # only the boundary
 
-Downloads the 193 iB5000 sheets into .cache/ (about 1.2 GB; only sheets
-that are missing or have been revised are fetched again), then writes
-hk_terrestrial.geojson, hk_terrestrial_2m.geojson, hk_sea_mask.geojson and
-sheets.json.
+The land target downloads the 193 iB5000 sheets into .cache/ (about 1.2 GB;
+only sheets that are missing or have been revised are fetched again), then
+writes hk_terrestrial.geojson, hk_terrestrial_2m.geojson, hk_sea_mask.geojson
+and sheets.json. The boundary target downloads one file of under 1 MB and
+writes hk_boundary.geojson.
 """
 
+import argparse
 import json
 import sys
 import time
@@ -33,6 +38,18 @@ OUTPUT_LIGHT = "hk_terrestrial_2m.geojson"
 OUTPUT_MASK = "hk_sea_mask.geojson"
 MANIFEST = "sheets.json"
 
+# Hong Kong's 18 districts, land and sea, from the Home Affairs Department
+# (DATA.GOV.HK dataset hk-had-json1-hong-kong-administrative-boundaries).
+# Together they cover the whole HKSAR, so their union is its boundary.
+DISTRICTS = (
+    "https://www.had.gov.hk/psi/hong-kong-administrative-boundaries/"
+    "hksar_18_district_boundary.json"
+)
+OUTPUT_BOUNDARY = "hk_boundary.geojson"
+# The HKSAR's published total area, land and sea, is about 2,755 km². A union
+# outside this range means the source changed shape and needs a look.
+BOUNDARY_KM2 = (2750, 2760)
+
 # What counts as land. iB5000 codes, from its data dictionary:
 #   LAF            Coastline And LandFill: the land polygon, bounded by the
 #                  high-water mark
@@ -53,6 +70,7 @@ MASK_DECIMALS = 6  # about 10 cm; plenty for a shape already within 2 m
 WORLD = [(-180, -90), (180, -90), (180, 90), (-180, 90), (-180, -90)]
 
 TO_WGS84 = pyproj.Transformer.from_crs(2326, 4326, always_xy=True).transform
+TO_GRID = pyproj.Transformer.from_crs(4326, 2326, always_xy=True).transform
 
 
 def fetch_index():
@@ -113,6 +131,19 @@ def rounded(c, decimals):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "targets", nargs="*", choices=["land", "boundary"],
+        help="what to build (default: everything)",
+    )
+    targets = parser.parse_args().targets or ["land", "boundary"]
+    if "land" in targets:
+        build_land()
+    if "boundary" in targets:
+        build_boundary()
+
+
+def build_land():
     CACHE.mkdir(parents=True, exist_ok=True)
     index = fetch_index()
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -143,6 +174,34 @@ def main():
     with open(MANIFEST, "w") as f:
         json.dump({s: index[s]["REVISIONDATE"] for s in sorted(index)}, f, indent=0)
         f.write("\n")
+
+
+def build_boundary():
+    """Write the HKSAR boundary, land and sea: the union of its 18 districts."""
+    with urllib.request.urlopen(DISTRICTS, timeout=120) as r:
+        districts = json.load(r)["features"]
+    assert len(districts) == 18, f"expected 18 districts, got {len(districts)}"
+
+    # Union in the grid, so the gap and area thresholds are in metres.
+    parts = [transform(TO_GRID, shapely.geometry.shape(d["geometry"])) for d in districts]
+    union = unary_union([p for g in parts for p in polygons(shapely.make_valid(g))])
+    # Neighbouring districts can leave hairline gaps or slivers along shared
+    # edges; the territory itself has no holes and is one piece.
+    pieces = [Polygon(p.exterior) for p in polygons(union) if p.area >= MIN_PART_M2]
+    assert len(pieces) == 1, f"expected one polygon, got {len(pieces)}"
+    boundary = pieces[0]
+
+    area_km2 = boundary.area / 1e6
+    low, high = BOUNDARY_KM2
+    assert low <= area_km2 <= high, f"boundary is {area_km2:.2f} km², expected {low}–{high}"
+
+    boundary = shapely.set_precision(transform(TO_WGS84, boundary), 10**-DECIMALS)
+    boundary = shapely.orient_polygons(boundary)  # RFC 7946 winding
+    dump(boundary, OUTPUT_BOUNDARY, DECIMALS)
+    print(
+        f"{OUTPUT_BOUNDARY}: 1 polygon, "
+        f"{shapely.get_num_coordinates(boundary)} points, {area_km2:.2f} km²"
+    )
 
 
 def write(land, path):

@@ -27,13 +27,36 @@ free-of-charge basis", on the condition that you:
 The linked terms are authoritative. Where this summary and the terms differ,
 the terms apply.
 
+### The boundary
+
+`hk_boundary.geojson` is derived from a different source: the **Hong Kong
+Administrative Boundaries** dataset of the Home Affairs Department,
+Government of the Hong Kong SAR, published on DATA.GOV.HK. That file, and the
+modifications made to it here, are governed by the **DATA.GOV.HK Terms and
+Conditions of Use**: <https://data.gov.hk/en/terms-and-conditions>
+
+Those terms likewise allow you to "browse, download, distribute, reproduce,
+hyperlink to, and print the Data for both commercial and non-commercial
+purposes on a free-of-charge basis", on the condition that you identify the
+source, acknowledge the Government's and the relevant organisations'
+intellectual property rights, "give proper attribution to the Government, the
+Relevant Organisations and DATA.GOV.HK", and indemnify them against claims.
+Its disclaimer is to the same effect as the one below.
+
 ## Attribution
 
-When you use this data, credit:
+When you use the land files or the sea mask, credit:
 
 > Contains data from the iB5000 Digital Topographic Map, Lands Department,
 > Government of the Hong Kong SAR, obtained from the CSDI Portal.
 > Modified by aknopla (https://github.com/aknopla/hk-terrestrial-geojson).
+
+When you use the boundary, credit:
+
+> Contains data from the Hong Kong Administrative Boundaries dataset, Home
+> Affairs Department, Government of the Hong Kong SAR, obtained from
+> DATA.GOV.HK. Modified by aknopla
+> (https://github.com/aknopla/hk-terrestrial-geojson).
 
 ## Disclaimer
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HK Terrestrial GeoJSON</title>
-  <meta name="description" content="Hong Kong's land area as one GeoJSON MultiPolygon, from the Lands Department's 1:5,000 map, shown over OpenStreetMap or aerial imagery.">
+  <meta name="description" content="Hong Kong's land area as one GeoJSON MultiPolygon, from the Lands Department's 1:5,000 map, and the HKSAR boundary, land and sea, shown over OpenStreetMap or aerial imagery.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23c9dbe6'/%3E%3Crect x='3' y='3' width='10' height='10' rx='2' fill='%23d9480f' fill-opacity='.6' stroke='%23d9480f'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css">
   <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
@@ -13,6 +13,8 @@
       --land: #f3f1ec;
       --ocean: #c9dbe6;
       --overlay: #d9480f;
+      --boundary: #5a189a;
+      --boundary-on-imagery: #ffffff;
       --card-bg: rgba(255, 255, 255, 0.92);
       --card-text: #1f2328;
       --card-muted: #59636e;
@@ -31,6 +33,7 @@
     .card p { margin: 0 0 8px; color: var(--card-muted); }
     .card .key { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px;
       border: 1px solid var(--overlay); background: color-mix(in srgb, var(--overlay) 35%, transparent); }
+    .card .key.line { width: 16px; height: 0; border: 0; border-top: 2px dashed var(--boundary); background: none; vertical-align: 3px; }
     .card nav a { color: var(--card-text); font-weight: 500; margin-right: 12px; }
     .toggle { display: flex; margin: 0 0 8px; border: 1px solid #d0d7de; border-radius: 6px; overflow: hidden; }
     .toggle:last-of-type { margin-bottom: 10px; }
@@ -52,7 +55,8 @@
   <div id="map"></div>
   <div class="card">
     <h1>HK terrestrial GeoJSON</h1>
-    <p><span class="key"></span>Hong Kong's land area, from the Lands Department's 1:5,000 map</p>
+    <p><span class="key"></span>Hong Kong's land area, from the Lands Department's 1:5,000 map<br>
+      <span class="key line"></span>The HKSAR boundary, land and sea</p>
     <div class="toggle" role="radiogroup" aria-label="Basemap" data-param="basemap">
       <button type="button" role="radio" data-value="map">Map</button>
       <button type="button" role="radio" data-value="satellite">Satellite</button>
@@ -61,8 +65,13 @@
       <button type="button" role="radio" data-value="full">Full detail <span>4.8 MB</span></button>
       <button type="button" role="radio" data-value="2m">Within 2 m <span>1.75 MB</span></button>
     </div>
+    <div class="toggle" role="radiogroup" aria-label="Boundary" data-param="boundary">
+      <button type="button" role="radio" data-value="show">Boundary</button>
+      <button type="button" role="radio" data-value="hide">No boundary</button>
+    </div>
     <nav>
-      <a id="download" href="">Download</a>
+      <a id="download" href="">Download land</a>
+      <a id="download-boundary" href="">Boundary</a>
       <a href="https://github.com/aknopla/hk-terrestrial-geojson">GitHub</a>
       <span class="status" id="status" aria-live="polite"></span>
     </nav>
@@ -71,14 +80,16 @@
     const css = getComputedStyle(document.documentElement);
     const color = (name) => css.getPropertyValue(name).trim();
 
-    // Bounds of hk_terrestrial.geojson.
-    const HK = [[113.8350316, 22.1533951], [114.4419732, 22.5618462]];
+    // Bounds of hk_boundary.geojson, which reaches further than the land.
+    const HK = [[113.8171046, 22.1367275], [114.502469, 22.5683301]];
     const RELEASE = "https://github.com/aknopla/hk-terrestrial-geojson/releases/latest/download/";
     const FILES = { full: "hk_terrestrial.geojson", "2m": "hk_terrestrial_2m.geojson" };
-    const DEFAULTS = { basemap: "map", detail: "full" };
+    const BOUNDARY = "hk_boundary.geojson";
+    const DEFAULTS = { basemap: "map", detail: "full", boundary: "show" };
 
-    // Each switch is kept in the URL (?basemap=satellite, ?detail=2m) when it
-    // isn't the default, so a shared link opens the same view.
+    // Each switch is kept in the URL (?basemap=satellite, ?detail=2m,
+    // ?boundary=hide) when it isn't the default, so a shared link opens the
+    // same view.
     const params = new URLSearchParams(location.search);
     const toggles = [...document.querySelectorAll(".toggle")];
     const state = {};
@@ -98,6 +109,7 @@
         }
       }
       download.href = RELEASE + FILES[state.detail];
+      document.getElementById("download-boundary").href = RELEASE + BOUNDARY;
       for (const [key, value] of Object.entries(state)) {
         if (value === DEFAULTS[key]) params.delete(key); else params.set(key, value);
       }
@@ -107,6 +119,8 @@
     render();
 
     const satellite = () => state.basemap === "satellite";
+    const boundaryShown = () => state.boundary === "show";
+    const boundaryColor = () => color(satellite() ? "--boundary-on-imagery" : "--boundary");
     const visible = (on) => ({ visibility: on ? "visible" : "none" });
 
     const map = new maplibregl.Map({
@@ -120,7 +134,9 @@
       touchPitch: false,
       attributionControl: {
         customAttribution:
-          'Hong Kong land: <a href="https://portal.csdi.gov.hk/">Lands Department via CSDI</a>',
+          'Hong Kong land: <a href="https://portal.csdi.gov.hk/">Lands Department via CSDI</a>; ' +
+          'boundary: <a href="https://data.gov.hk/en-data/dataset/hk-had-json1-hong-kong-administrative-boundaries">' +
+          "Home Affairs Department via DATA.GOV.HK</a>",
       },
       style: {
         version: 8,
@@ -144,6 +160,7 @@
               "Satellite Images from Landsat and MODIS",
           },
           hk: { type: "geojson", data: FILES[state.detail] },
+          boundary: { type: "geojson", data: BOUNDARY },
         },
         layers: [
           // Map: two colours only, everything is land except OSM's ocean.
@@ -164,6 +181,16 @@
           {
             id: "hk-line", type: "line", source: "hk",
             paint: { "line-color": color("--overlay"), "line-width": satellite() ? 1.5 : 1 },
+          },
+          // The boundary: a dashed outline only, so the land stays readable.
+          {
+            id: "boundary-line", type: "line", source: "boundary",
+            layout: visible(boundaryShown()),
+            paint: {
+              "line-color": boundaryColor(),
+              "line-width": satellite() ? 2 : 1.5,
+              "line-dasharray": [3, 2],
+            },
           },
         ],
       },
@@ -199,11 +226,15 @@
       if (changed === "detail") {
         map.getSource("hk").setData(FILES[state.detail]);
         map.once("idle", () => (status.textContent = ""));
+      } else if (changed === "boundary") {
+        map.setLayoutProperty("boundary-line", "visibility", boundaryShown() ? "visible" : "none");
       } else {
         map.setLayoutProperty("ocean", "visibility", satellite() ? "none" : "visible");
         map.setLayoutProperty("imagery", "visibility", satellite() ? "visible" : "none");
         map.setPaintProperty("hk-fill", "fill-opacity", satellite() ? 0.2 : 0.35);
         map.setPaintProperty("hk-line", "line-width", satellite() ? 1.5 : 1);
+        map.setPaintProperty("boundary-line", "line-color", boundaryColor());
+        map.setPaintProperty("boundary-line", "line-width", satellite() ? 2 : 1.5);
         showLogo(satellite());
       }
     }
