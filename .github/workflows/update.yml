@@ -1,0 +1,78 @@
+# Check the government sources daily; rebuild, commit and release on change.
+# The decisions are made by update.py; see its docstring.
+
+name: Update
+
+on:
+  schedule:
+    - cron: "17 2 * * *" # daily, 10:17 Hong Kong time
+  workflow_dispatch:
+    inputs:
+      allow_large_change:
+        description: Release even if the land or boundary moved by more than 5 km²
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags, for the next version number
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The iB5000 sheets, about 1.2 GB. Only revised sheets are downloaded
+      # again; the cache is saved under the new sheets.json after a rebuild.
+      - id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/ib5000
+          key: ib5000-${{ hashFiles('sheets.json') }}
+          restore-keys: ib5000-
+
+      - id: update
+        run: python update.py
+        env:
+          ALLOW_LARGE_CHANGE: ${{ inputs.allow_large_change && '1' || '' }}
+
+      - if: steps.restore.outputs.cache-matched-key != format('ib5000-{0}', hashFiles('sheets.json')) && hashFiles('.cache/ib5000/*.zip') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/ib5000
+          key: ib5000-${{ hashFiles('sheets.json') }}
+
+      - if: steps.update.outputs.commit == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sheets.json README.md index.html *.geojson
+          git commit -m "$MESSAGE"
+          git push
+        env:
+          MESSAGE: ${{ steps.update.outputs.message }}
+
+      - if: steps.update.outputs.release == 'true'
+        run: |
+          previous=$(git tag --list 'v*' --sort=-v:refname | head -1)
+          IFS=. read -r major minor patch <<< "${previous#v}"
+          tag="v$major.$minor.$((patch + 1))"
+          files="hk_terrestrial.geojson hk_terrestrial_2m.geojson hk_sea_mask.geojson hk_boundary.geojson"
+          sha256sum $files > SHA256SUMS
+          gh release create "$tag" $files SHA256SUMS --target "$(git rev-parse HEAD)" \
+            --title "$tag" --notes-file "$RUNNER_TEMP/notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}

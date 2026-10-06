@@ -6,6 +6,9 @@ hk_boundary.geojson from the Home Affairs Department's district boundaries.
     python build.py land        # only the land files and the sea mask
     python build.py boundary    # only the boundary
 
+Either way, the figures in README.md and index.html are then refreshed from
+the files on disk.
+
 The land target downloads the 193 iB5000 sheets into .cache/ (about 1.2 GB;
 only sheets that are missing or have been revised are fetched again), then
 writes hk_terrestrial.geojson, hk_terrestrial_2m.geojson, hk_sea_mask.geojson
@@ -14,7 +17,9 @@ writes hk_boundary.geojson.
 """
 
 import argparse
+import gzip
 import json
+import re
 import sys
 import time
 import urllib.request
@@ -37,6 +42,9 @@ OUTPUT = "hk_terrestrial.geojson"
 OUTPUT_LIGHT = "hk_terrestrial_2m.geojson"
 OUTPUT_MASK = "hk_sea_mask.geojson"
 MANIFEST = "sheets.json"
+# Hong Kong's land is about 1,119 km². A build outside this range means the
+# source changed shape and needs a look.
+LAND_KM2 = (1100, 1140)
 
 # Hong Kong's 18 districts, land and sea, from the Home Affairs Department
 # (DATA.GOV.HK dataset hk-had-json1-hong-kong-administrative-boundaries).
@@ -74,9 +82,10 @@ TO_GRID = pyproj.Transformer.from_crs(4326, 2326, always_xy=True).transform
 
 
 def fetch_index():
+    """Each sheet's properties, with its outline (WGS 84) as "geometry"."""
     with urllib.request.urlopen(TILE_INDEX, timeout=120) as r:
         features = json.load(r)["features"]
-    return {f["properties"]["SHEETNO"]: f["properties"] for f in features}
+    return {f["properties"]["SHEETNO"]: {**f["properties"], "geometry": f["geometry"]} for f in features}
 
 
 def is_valid_zip(path):
@@ -141,11 +150,12 @@ def main():
         build_land()
     if "boundary" in targets:
         build_boundary()
+    update_docs()
 
 
-def build_land():
+def build_land(index=None):
     CACHE.mkdir(parents=True, exist_ok=True)
-    index = fetch_index()
+    index = index or fetch_index()
     with ThreadPoolExecutor(max_workers=4) as pool:
         for sheet, status in pool.map(lambda s: download(s, index[s]), sorted(index)):
             if status == "downloaded":
@@ -166,6 +176,10 @@ def build_land():
         if merged.equals(land):
             break
         land = merged
+
+    area_km2 = land.area / 1e6
+    low, high = LAND_KM2
+    assert low <= area_km2 <= high, f"land is {area_km2:.2f} km², expected {low}–{high}"
 
     light = land.simplify(LIGHT_SIMPLIFY_M, preserve_topology=True)
     write(land, OUTPUT)
@@ -243,6 +257,71 @@ def dump(geometry, path, decimals):
             f,
             separators=(",", ":"),
         )
+
+
+def read_geometry(path):
+    """The geometry of a one-feature GeoJSON file written by dump()."""
+    with open(path) as f:
+        return shapely.geometry.shape(json.load(f)["features"][0]["geometry"])
+
+
+def update_docs():
+    """Refresh the figures in README.md and index.html from the files on disk."""
+    files = (OUTPUT, OUTPUT_LIGHT, OUTPUT_MASK, OUTPUT_BOUNDARY)
+    data = {path: Path(path).read_bytes() for path in files}
+    geometry = {path: read_geometry(path) for path in files}
+    land, light, mask, boundary = (geometry[path] for path in files)
+
+    def km2(g):
+        return f"{transform(TO_GRID, g).area / 1e6:,.2f} km²"
+
+    rows = {
+        "**Size**": [f"**{size(len(data[p]))}**" for p in files],
+        "Gzipped": [size(len(gzip.compress(data[p]))) for p in files],
+        "Points": [f"{shapely.get_num_coordinates(geometry[p]):,}" for p in files],
+        "Shape": [
+            f"{len(land.geoms)} land polygons",
+            f"{len(light.geoms)} land polygons",
+            f"the world, with {len(mask.interiors)} land holes",
+            "one polygon, no holes",
+        ],
+        "Area": [km2(land), km2(light), "(everything else)", km2(boundary)],
+    }
+    with open(MANIFEST) as f:
+        dates = sorted(json.load(f).values())
+    first, last = (f"{d[:4]}-{d[4:6]}-{d[6:]}" for d in (dates[0], dates[-1]))
+
+    readme = Path("README.md").read_text()
+    for label, cells in rows.items():
+        readme = replace_once(rf"(?m)^\| {re.escape(label)} \|.*$", f"| {label} | {' | '.join(cells)} |", readme)
+    readme = replace_once(
+        r"revised between \d{4}-\d\d-\d\d and \d{4}-\d\d-\d\d",
+        f"revised between {first} and {last}",
+        readme,
+    )
+    Path("README.md").write_text(readme)
+
+    page = Path("index.html").read_text()
+    for value, path in (("full", OUTPUT), ("2m", OUTPUT_LIGHT)):
+        page = replace_once(
+            rf'(data-value="{value}">[^<]*<span>)[^<]*(</span>)',
+            rf"\g<1>{size(len(data[path]))}\g<2>",
+            page,
+        )
+    Path("index.html").write_text(page)
+
+
+def replace_once(pattern, replacement, text):
+    text, n = re.subn(pattern, replacement, text)
+    assert n == 1, f"expected one match for {pattern!r}, got {n}"
+    return text
+
+
+def size(n):
+    """A file size as written in the README: 4.84 MB, 1.3 MB, 59 KB."""
+    if n < 100_000:
+        return f"{n / 1000:.0f} KB"
+    return f"{n / 1e6:.2f}".rstrip("0").rstrip(".") + " MB"
 
 
 if __name__ == "__main__":
