@@ -20,8 +20,8 @@ sea.
 
 | | `hk_terrestrial.geojson` | `hk_terrestrial_2m.geojson` | `hk_sea_mask.geojson` | `hk_boundary.geojson` |
 |---|---:|---:|---:|---:|
-| **Size** | **4.8 MB** | **1.75 MB** | **1.6 MB** | **59 KB** |
-| Gzipped | 1.3 MB | 0.5 MB | 0.42 MB | 17 KB |
+| **Size** | **4.84 MB** | **1.75 MB** | **1.61 MB** | **59 KB** |
+| Gzipped | 1.3 MB | 0.51 MB | 0.42 MB | 17 KB |
 | Points | 195,189 | 70,652 | 70,653 | 2,386 |
 | Shape | 823 land polygons | 823 land polygons | the world, with 823 land holes | one polygon, no holes |
 | Area | 1,118.73 km² | 1,118.69 km² | (everything else) | 2,755.11 km² |
@@ -96,6 +96,7 @@ the land files.
 | `hk_boundary.geojson` | The HKSAR boundary, land and sea: one Polygon. |
 | `sheets.json` | The revision date of each of the 193 map sheets the dataset was built from. |
 | `build.py` | Downloads the sources and builds all four files. |
+| `update.py` | Checks the sources for updates, rebuilds and decides whether to release; run daily by GitHub Actions. |
 
 All files use WGS 84 longitude/latitude (`EPSG:4326` / `CRS84`), the
 GeoJSON default. The land files and the boundary round coordinates to 7
@@ -131,9 +132,9 @@ Land is taken from these iB5000 feature codes:
 | `PON` `RES` `FEB` `FOU` `SRC` `SRO` `SRP` | Inland water: ponds, reservoirs, filter beds, fountains, service reservoirs |
 | `MAN` | Mangrove |
 
-As a check, the `LAF` polygon alone covers 1,114.66 km², against the Lands
-Department's published land area of 1,114.57 km². Mangroves outside it add
-another 4.04 km².
+As a check, when this was first built (v2.0.0), the `LAF` polygon alone
+covered 1,114.66 km², against the Lands Department's published land area of
+1,114.57 km². Mangroves outside it added another 4.04 km².
 
 The boundary comes from the **Hong Kong Administrative Boundaries** dataset
 of the Home Affairs Department, Government of the Hong Kong SAR, published on
@@ -159,14 +160,38 @@ For the land, `build.py`:
    exactly;
 4. fills any holes, since water enclosed by land counts as land, and drops
    slivers under 1 m²;
-5. converts to longitude/latitude, rounds coordinates, and writes the three
-   files and `sheets.json`.
+5. checks that the land comes to 1,100–1,140 km², converts to
+   longitude/latitude, rounds coordinates, and writes the three files and
+   `sheets.json`.
 
 For the boundary, it downloads the 18 districts, merges them in the map's
 grid, drops any sliver under 1 m² left along shared edges, checks that the
 result is one polygon of 2,750–2,760 km², and writes it.
 
-## Releasing
+Either way, it then refreshes the sizes, point counts, areas and revision
+dates in this README and the file sizes on the map page.
+
+## Updates
+
+A [GitHub Actions workflow](.github/workflows/update.yml) runs `update.py`
+every day. It checks the iB5000 sheet index against `sheets.json`, rebuilds
+the land if any sheet has been revised, and rebuilds the boundary.
+
+- If the land or the boundary has moved by 1 m² or more, it commits the new
+  files and publishes a patch release (v2.2.0 → v2.2.1), with notes giving
+  the change in area and the map sheets it falls in.
+- If sheets were revised but the shape didn't change, which is most of the
+  time, it commits only the new dates in `sheets.json`, without a release.
+- A change of more than 5 km² stops the run for a check by hand. Once it
+  looks right, run the workflow from the Actions tab with
+  *allow_large_change* ticked.
+
+To hear about new versions, watch the repo's releases (Watch → Custom →
+Releases).
+
+## Releasing by hand
+
+For a new minor or major version:
 
 ```bash
 python build.py
