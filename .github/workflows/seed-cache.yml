@@ -1,0 +1,30 @@
+# One-off: fill the iB5000 sheet cache that update.yml restores, from a
+# tarball on the draft release ib5000-seed, instead of downloading all 193
+# sheets from CSDI. Remove this file and the draft release once it has run.
+
+name: Seed cache
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write # to read a draft release
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - run: |
+          gh release download ib5000-seed --pattern ib5000.tar --dir "$RUNNER_TEMP"
+          mkdir -p .cache/ib5000
+          tar -xf "$RUNNER_TEMP/ib5000.tar" -C .cache/ib5000
+          ls .cache/ib5000/*.zip | wc -l
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - uses: actions/cache/save@v4
+        with:
+          path: .cache/ib5000
+          key: ib5000-${{ hashFiles('sheets.json') }}
