@@ -97,6 +97,7 @@ the land files.
 | `sheets.json` | The revision date of each of the 193 map sheets the dataset was built from. |
 | `build.py` | Downloads the sources and builds all four files. |
 | `update.py` | Checks the sources for updates, rebuilds and decides whether to release; run daily by GitHub Actions. |
+| `hkmapservice_ca.pem` | A certificate the map sheets' server leaves out of its chain; `build.py` needs it to download them. |
 
 All files use WGS 84 longitude/latitude (`EPSG:4326` / `CRS84`), the
 GeoJSON default. The land files and the boundary round coordinates to 7
