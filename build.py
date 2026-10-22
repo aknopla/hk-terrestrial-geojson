@@ -20,6 +20,7 @@ import argparse
 import gzip
 import json
 import re
+import ssl
 import sys
 import time
 import urllib.request
@@ -38,6 +39,10 @@ TILE_INDEX = (
     "?dataset_id=landsd_rcd_1637224243141_96556&format=geojson&layer_name=TileIndex"
 )
 CACHE = Path(".cache/ib5000")
+# The sheets' server leaves its intermediate certificate out of the chain, so
+# it is trusted here alongside the system's roots; see the file.
+SHEET_TLS = ssl.create_default_context()
+SHEET_TLS.load_verify_locations(Path(__file__).with_name("hkmapservice_ca.pem"))
 OUTPUT = "hk_terrestrial.geojson"
 OUTPUT_LIGHT = "hk_terrestrial_2m.geojson"
 OUTPUT_MASK = "hk_sea_mask.geojson"
@@ -105,17 +110,18 @@ def download(sheet, props):
     part = path.with_suffix(".part")
     for attempt in range(5):
         try:
-            with urllib.request.urlopen(props["FGDB"], timeout=900) as r, open(part, "wb") as f:
+            with urllib.request.urlopen(props["FGDB"], timeout=900, context=SHEET_TLS) as r, open(part, "wb") as f:
                 while chunk := r.read(1 << 20):
                     f.write(chunk)
             if is_valid_zip(part):
                 part.replace(path)
                 revision.write_text(props["REVISIONDATE"])
                 return sheet, "downloaded"
-        except OSError:
-            pass
+            error = "not a valid zip"
+        except OSError as e:
+            error = e
         time.sleep(5 * (attempt + 1))
-    raise RuntimeError(f"could not download sheet {sheet}")
+    raise RuntimeError(f"could not download sheet {sheet}: {error}")
 
 
 def read(sheet, layer, codes):
