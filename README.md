@@ -22,8 +22,8 @@ sea.
 |---|---:|---:|---:|---:|
 | **Size** | **4.84 MB** | **1.75 MB** | **1.61 MB** | **59 KB** |
 | Gzipped | 1.3 MB | 0.51 MB | 0.42 MB | 17 KB |
-| Points | 195,189 | 70,652 | 70,653 | 2,386 |
-| Shape | 823 land polygons | 823 land polygons | the world, with 823 land holes | one polygon, no holes |
+| Points | 195,049 | 70,566 | 70,568 | 2,386 |
+| Shape | 811 land polygons | 811 land polygons | the world, with 811 land holes | one polygon, no holes |
 | Area | 1,118.73 km² | 1,118.69 km² | (everything else) | 2,755.11 km² |
 | Detail | the map's full detail | every edge within 2 m of the full file | the 2 m shape, coordinates to about 10 cm | the Home Affairs Department's district boundaries |
 | Use it for | analysis, precise land/sea tests | apps and web maps | dimming or hiding a map outside Hong Kong | "is this in Hong Kong at all?", keeping a map on Hong Kong |
@@ -122,7 +122,7 @@ Department, Government of the Hong Kong SAR, published on the
 [CSDI Portal](https://portal.csdi.gov.hk/) (dataset
 `landsd_rcd_1637224243141_96556`). The map is derived from the 1:1,000
 iB1000 database and is revised every two weeks. The sheets used for the
-current build were revised between 2025-09-25 and 2026-09-10; `sheets.json`
+current build were revised between 2025-10-23 and 2026-09-27; `sheets.json`
 lists each one.
 
 Land is taken from these iB5000 feature codes:
