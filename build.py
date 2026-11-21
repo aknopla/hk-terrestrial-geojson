@@ -26,6 +26,7 @@ import time
 import urllib.request
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 
 import pyogrio
@@ -87,10 +88,34 @@ TO_GRID = pyproj.Transformer.from_crs(4326, 2326, always_xy=True).transform
 
 
 def fetch_index():
-    """Each sheet's properties, with its outline (WGS 84) as "geometry"."""
+    """Each sheet's properties, with its outline (WGS 84) as "geometry" and
+    its REVISIONDATE as YYYY-MM-DD."""
     with urllib.request.urlopen(TILE_INDEX, timeout=120) as r:
         features = json.load(r)["features"]
-    return {f["properties"]["SHEETNO"]: {**f["properties"], "geometry": f["geometry"]} for f in features}
+    return {
+        f["properties"]["SHEETNO"]: {
+            **f["properties"],
+            "REVISIONDATE": revision_date(f["properties"]["REVISIONDATE"]),
+            "geometry": f["geometry"],
+        }
+        for f in features
+    }
+
+
+# The index gave revision dates as 20261011 until November 2026, then as
+# 11/10/2026. Older entries in the cache keep whichever form they were
+# written in.
+DATE_FORMS = ("%Y-%m-%d", "%Y%m%d", "%d/%m/%Y")
+
+
+def revision_date(value):
+    """A sheet revision date, in any form the index has used, as YYYY-MM-DD."""
+    for form in DATE_FORMS:
+        try:
+            return datetime.strptime(value.strip(), form).date().isoformat()
+        except ValueError:
+            pass
+    raise ValueError(f"sheet revision date {value!r} is in none of the known forms {DATE_FORMS}")
 
 
 def is_valid_zip(path):
@@ -105,7 +130,7 @@ def download(sheet, props):
     """Fetch a sheet unless the cache already holds its current revision."""
     path = CACHE / f"{sheet}.zip"
     revision = CACHE / f"{sheet}.revision"
-    if revision.exists() and revision.read_text() == props["REVISIONDATE"] and path.exists():
+    if revision.exists() and revision_date(revision.read_text()) == props["REVISIONDATE"] and path.exists():
         return sheet, "cached"
     part = path.with_suffix(".part")
     for attempt in range(5):
@@ -295,7 +320,7 @@ def update_docs():
     }
     with open(MANIFEST) as f:
         dates = sorted(json.load(f).values())
-    first, last = (f"{d[:4]}-{d[4:6]}-{d[6:]}" for d in (dates[0], dates[-1]))
+    first, last = dates[0], dates[-1]
 
     readme = Path("README.md").read_text()
     for label, cells in rows.items():
