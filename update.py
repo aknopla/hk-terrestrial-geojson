@@ -40,10 +40,6 @@ def grid(geometry):
     return transform(build.TO_GRID, geometry)
 
 
-def iso(date):
-    return f"{date[:4]}-{date[4:6]}-{date[6:]}"
-
-
 def latest_tag():
     tags = subprocess.run(
         ["git", "tag", "--list", "v*", "--sort=-v:refname"], capture_output=True, text=True, check=True
@@ -53,7 +49,7 @@ def latest_tag():
 
 def main():
     with open(build.MANIFEST) as f:
-        before = json.load(f)
+        before = {s: build.revision_date(d) for s, d in json.load(f).items()}
     index = build.fetch_index()
     after = {s: index[s]["REVISIONDATE"] for s in sorted(index)}
     revised = sorted(s for s in before.keys() | after.keys() if before.get(s) != after.get(s))
@@ -90,7 +86,7 @@ def main():
 
     build.update_docs()
 
-    as_of = iso(max(after.values()))
+    as_of = max(after.values())
     release = bool(changes)
     if release:
         parts = []
