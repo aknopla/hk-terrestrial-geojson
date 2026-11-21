@@ -122,7 +122,7 @@ Department, Government of the Hong Kong SAR, published on the
 [CSDI Portal](https://portal.csdi.gov.hk/) (dataset
 `landsd_rcd_1637224243141_96556`). The map is derived from the 1:1,000
 iB1000 database and is revised every two weeks. The sheets used for the
-current build were revised between 2026-03-26 and 2026-10-22; `sheets.json`
+current build were revised between 2026-03-26 and 2026-11-05; `sheets.json`
 lists each one.
 
 Land is taken from these iB5000 feature codes:
